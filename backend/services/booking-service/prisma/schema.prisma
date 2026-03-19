@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String    @id
+  cognito_id String    @unique
+  email      String    @unique
+  first_name String
+  last_name  String
+  phone      String?
+  created_at DateTime  @default(now())
+  bookings   Booking[]
+}
+
+model Venue {
+  id             String   @id
+  name           String
+  address        String
+  city           String
+  state          String
+  lat            Float
+  lng            Float
+  capacity       Int
+  seat_layout_id String
+  created_at     DateTime @default(now())
+  events         Event[]
+}
+
+model Event {
+  id           String      @id
+  title        String
+  description  String?
+  venue_id     String
+  venue        Venue       @relation(fields: [venue_id], references: [id])
+  start_at     DateTime
+  end_at       DateTime
+  status       String      // "DRAFT" | "LIVE" | "COMPLETED" | "CANCELLED"
+  organizer_id String
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+  price_tiers  PriceTier[]
+  bookings     Booking[]
+}
+
+model PriceTier {
+  id         String   @id
+  event_id   String
+  event      Event    @relation(fields: [event_id], references: [id])
+  name       String
+  price      Float
+  seat_types String[]
+  created_at DateTime @default(now())
+}
+
+model Booking {
+  id                String    @id
+  user_id           String
+  user              User      @relation(fields: [user_id], references: [id])
+  event_id          String
+  event             Event     @relation(fields: [event_id], references: [id])
+  seats             String[]
+  status            String    // "HOLD" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
+  held_until        DateTime?
+  payment_intent_id String?   // Phase 2
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+}

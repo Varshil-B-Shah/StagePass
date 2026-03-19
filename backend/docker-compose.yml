@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: stagepass-dynamodb
+    ports:
+      - "8000:8000"
+    command: -jar DynamoDBLocal.jar -sharedDb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: stagepass-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: stagepass
+      POSTGRES_PASSWORD: stagepass
+      POSTGRES_DB: stagepass_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stagepass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: stagepass-redis
+    ports:
+      - "6379:6379"
+    # --notify-keyspace-events Ex enables expired-key notifications
+    # Required for the Redis subscriber to detect hold expiry in Chunk 4
+    command: redis-server --appendonly yes --notify-keyspace-events Ex
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  booking-service:
+    build:
+      context: .               # backend/ directory — gives Dockerfile access to shared/
+      dockerfile: services/booking-service/Dockerfile
+      target: dev
+    container_name: stagepass-booking
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://stagepass:stagepass@postgres:5432/stagepass_dev
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      REDIS_URL: redis://redis:6379
+      WS_MODE: local
+      WS_SERVER_URL: http://ws-server:4000
+      JWT_SECRET: ${JWT_SECRET}
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      LOG_LEVEL: debug
+      # Production auth only — leave blank for local dev (auth uses JWT_SECRET instead)
+      COGNITO_REGION: us-east-1
+      COGNITO_USER_POOL_ID: ""
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ws-server:
+        condition: service_started
+    volumes:
+      - ./services/booking-service:/app
+      - /app/node_modules
+
+  ws-server:
+    build:
+      context: ./services/ws-server
+      dockerfile: Dockerfile
+      target: dev
+    container_name: stagepass-ws
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: debug
+    volumes:
+      - ./services/ws-server:/app
+      - /app/node_modules
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: stagepass-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      BOOKING_SERVICE_URL: http://booking-service:3001
+      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+      COGNITO_REGION: us-east-1
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-placeholder}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - booking-service
+      - ws-server
+
+volumes:
+  postgres_data:
+  redis_data:

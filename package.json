@@ -1,0 +1,14 @@
+{
+  "name": "stagepass",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter frontend --filter booking-service --filter ws-server dev",
+    "build": "pnpm --recursive build",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint",
+    "db:migrate": "pnpm --filter booking-service db:migrate",
+    "db:seed": "pnpm --filter booking-service db:seed",
+    "db:setup": "pnpm --filter booking-service dynamo:create && pnpm --filter booking-service db:migrate && pnpm --filter booking-service db:seed"
+  }
+}
