@@ -5,7 +5,8 @@ const config: Config = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/tests/integration/'],
+  testPathIgnorePatterns: ['/node_modules/'],
+  forceExit: true,
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },

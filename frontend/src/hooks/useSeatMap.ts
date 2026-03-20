@@ -15,7 +15,7 @@ export function useSeatMap(show_id: string) {
 
   const fetchSeatMap = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${show_id}/seats`)
+      const res = await fetch(`/api/events/${encodeURIComponent(show_id)}/seats`)
       if (!res.ok) throw new Error(`Seat map fetch failed: ${res.status}`)
       const data: SeatMap = await res.json()
       setSeatMap(data)
@@ -33,23 +33,31 @@ export function useSeatMap(show_id: string) {
 
   // WebSocket connection lifecycle
   useEffect(() => {
+    let active = true  // guard against stale closures after unmount
+
     const connectWs = async () => {
+      if (!active) return
       try {
         const authRes = await fetch('/api/ws/auth')
         if (!authRes.ok) return   // unauthenticated — do not reconnect
         const { token } = await authRes.json() as { token: string }
 
+        if (!active) return  // unmounted while awaiting auth
+
         // Note: show_id is NOT in the URL to avoid encoding issues.
         // The subscribe message is sent in onopen instead.
         const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:4000'}?token=${token}`
-        ws.current = new WebSocket(wsUrl)
+        const socket = new WebSocket(wsUrl)
+        ws.current = socket
 
-        ws.current.onopen = () => {
+        socket.onopen = () => {
           reconnectDelay.current = 1000
-          ws.current?.send(JSON.stringify({ action: 'subscribe', channel: `show:${show_id}` }))
+          // Use local `socket` ref — ws.current may point to a newer socket
+          // if React StrictMode double-invoked this effect.
+          socket.send(JSON.stringify({ action: 'subscribe', channel: `show:${show_id}` }))
         }
 
-        ws.current.onmessage = (event) => {
+        socket.onmessage = (event) => {
           const payload = JSON.parse(event.data as string) as {
             type?: string
             seat_id?: string
@@ -79,11 +87,13 @@ export function useSeatMap(show_id: string) {
           }
         }
 
-        ws.current.onerror = () => {
+        socket.onerror = () => {
           // Errors are handled in onclose (WS always closes after error)
         }
 
-        ws.current.onclose = () => {
+        socket.onclose = () => {
+          if (!active) return  // component unmounted — skip refetch and reconnect
+
           // Re-fetch seat map to catch any missed updates while disconnected
           fetchSeatMap()
 
@@ -94,6 +104,7 @@ export function useSeatMap(show_id: string) {
           }, reconnectDelay.current)
         }
       } catch {
+        if (!active) return
         // Retry on connection failure
         reconnectTimeout.current = setTimeout(() => {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 8_000)
@@ -105,12 +116,12 @@ export function useSeatMap(show_id: string) {
     connectWs()
 
     return () => {
+      active = false  // prevent stale onclose/reconnect after unmount
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current)
-      // Null onclose before closing so the close event does not schedule
-      // another reconnect after the component has already unmounted.
       if (ws.current) {
         ws.current.onclose = null
         ws.current.close()
+        ws.current = null
       }
     }
   }, [show_id, fetchSeatMap])

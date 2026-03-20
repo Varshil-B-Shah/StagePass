@@ -65,14 +65,22 @@ async function main() {
   // hold_expires_at stores Unix ms for code consistency.
   // Both fields are written together when a hold is created (see Chunk 3 seat.repository.ts).
   // DynamoDB TTL is a fallback cleanup only — Redis TTL fires first (see Chunk 4 redis.subscriber.ts).
-  await dynamo.updateTimeToLive({
-    TableName: 'seats',
-    TimeToLiveSpecification: {
-      Enabled: true,
-      AttributeName: 'hold_expires_at_ttl',  // Unix seconds
-    },
-  }).promise()
-  console.log('  TTL enabled on seats.hold_expires_at_ttl')
+  try {
+    await dynamo.updateTimeToLive({
+      TableName: 'seats',
+      TimeToLiveSpecification: {
+        Enabled: true,
+        AttributeName: 'hold_expires_at_ttl',  // Unix seconds
+      },
+    }).promise()
+    console.log('  TTL enabled on seats.hold_expires_at_ttl')
+  } catch (err: any) {
+    if (err.code === 'ValidationException' && err.message?.includes('already enabled')) {
+      console.log('  TTL already enabled on seats.hold_expires_at_ttl — skipping')
+    } else {
+      throw err
+    }
+  }
 
   // seat_types table
   // PK: venue_id, SK: seat_type_id

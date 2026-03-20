@@ -1,13 +1,17 @@
-import jwt from 'jsonwebtoken'
 import { NextRequest } from 'next/server'
+
+// jose is ESM-only — mock it so Jest (CJS) can parse the middleware import
+const mockJwtVerify = jest.fn()
+jest.mock('jose', () => ({
+  jwtVerify: mockJwtVerify,
+  createRemoteJWKSet: jest.fn(),
+}))
+
+// Import after mock is registered
+// eslint-disable-next-line import/first
 import { middleware } from '../src/middleware'
 
-const JWT_SECRET = 'test-bff-secret'
-process.env.JWT_SECRET = JWT_SECRET
-
-function makeRefreshToken(sub = 'user-1', email = 'user@test.com') {
-  return jwt.sign({ sub, email }, JWT_SECRET, { expiresIn: '1h' })
-}
+process.env.JWT_SECRET = 'test-bff-secret'
 
 function makeRequest(path: string, refreshToken?: string): NextRequest {
   const headers: HeadersInit = {}
@@ -31,14 +35,17 @@ describe('BFF middleware', () => {
   })
 
   it('returns 401 when refresh_token is invalid', async () => {
+    mockJwtVerify.mockRejectedValueOnce(new Error('invalid signature'))
     const req = makeRequest('/api/bookings/hold', 'not.a.valid.token')
     const res = await middleware(req)
     expect(res.status).toBe(401)
   })
 
   it('passes through with a valid refresh_token', async () => {
-    const token = makeRefreshToken('user-abc', 'abc@test.com')
-    const req = makeRequest('/api/bookings/hold', token)
+    mockJwtVerify.mockResolvedValueOnce({
+      payload: { sub: 'user-abc', email: 'abc@test.com' },
+    })
+    const req = makeRequest('/api/bookings/hold', 'any.token.value')
     const res = await middleware(req)
     expect(res.status).toBe(200)
   })

@@ -128,6 +128,9 @@ importers:
       '@aws-sdk/client-cognito-identity-provider':
         specifier: ^3.540.0
         version: 3.1012.0
+      jose:
+        specifier: ^6.2.2
+        version: 6.2.2
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
@@ -4016,6 +4019,10 @@ packages:
 
   /jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
+    dev: false
+
+  /jose@6.2.2:
+    resolution: {integrity: sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ==}
     dev: false
 
   /js-tokens@4.0.0:

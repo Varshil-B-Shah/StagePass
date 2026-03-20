@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { refreshAccessToken } from './lib/cognito'
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 export async function middleware(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith('/api')) {
+    return NextResponse.next()
+  }
+
+  // Dev auth endpoint creates the session cookie — must be exempt from auth check
+  if (req.nextUrl.pathname === '/api/dev/auth') {
     return NextResponse.next()
   }
 
@@ -15,15 +19,22 @@ export async function middleware(req: NextRequest) {
 
   try {
     let accessToken: string
-    let payload: { sub: string; email?: string }
+    let payload: { sub?: string; email?: string }
 
     if (process.env.NODE_ENV === 'production') {
-      const tokens = await refreshAccessToken(refreshToken)
-      accessToken = tokens.access_token
-      payload = jwt.decode(accessToken) as { sub: string; email?: string }
+      // Production: verify against Cognito JWKS
+      const jwksUrl = new URL(
+        `https://cognito-idp.${process.env.COGNITO_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`
+      )
+      const JWKS = createRemoteJWKSet(jwksUrl)
+      const { payload: p } = await jwtVerify(refreshToken, JWKS)
+      payload = p as { sub?: string; email?: string }
+      accessToken = refreshToken
     } else {
-      const secret = process.env.JWT_SECRET!
-      payload = jwt.verify(refreshToken, secret) as { sub: string; email?: string }
+      // Dev: verify with shared JWT_SECRET
+      const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
+      const { payload: p } = await jwtVerify(refreshToken, secret)
+      payload = p as { sub?: string; email?: string }
       accessToken = refreshToken
     }
 

@@ -4,7 +4,7 @@ RUN npm install -g pnpm@8.15.0
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 FROM deps AS dev
 COPY . .

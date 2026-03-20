@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { SeatRepository } from '../../src/repositories/seat.repository'
 import { RedisRepository } from '../../src/repositories/redis.repository'
 import { BookingRepository } from '../../src/repositories/booking.repository'
@@ -19,24 +20,28 @@ const stubWsService: IWsService = {
 let seatService: SeatService
 let seatRepo: SeatRepository
 
-beforeAll(() => {
+beforeAll(async () => {
   seatRepo = new SeatRepository(getDynamoClient())
-  const redisRepo = new RedisRepository(getRedisClient())
+  const redisRepo = new RedisRepository(await getRedisClient())
   const bookingRepo = new BookingRepository(prisma)
   seatService = new SeatService(seatRepo, redisRepo, bookingRepo, stubWsService)
 })
 
 beforeEach(async () => {
-  // Ensure seat is AVAILABLE and no holds exist before each test
+  // Ensure seat is AVAILABLE and clear hold keys for all users involved in this test
   await Promise.all([
     resetSeat(SHOW_ID, SEAT_ID),
-    clearHoldKeys(SHOW_ID, SEAT_ID),
+    clearHoldKeys(SHOW_ID, SEAT_ID, 'user-alice'),
+    clearHoldKeys(SHOW_ID, SEAT_ID, 'user-bob'),
   ])
 })
 
 afterAll(async () => {
-  // Leave the seat AVAILABLE for subsequent manual testing
-  await resetSeat(SHOW_ID, SEAT_ID)
+  await Promise.all([
+    resetSeat(SHOW_ID, SEAT_ID),
+    clearHoldKeys(SHOW_ID, SEAT_ID, 'user-alice'),
+    clearHoldKeys(SHOW_ID, SEAT_ID, 'user-bob'),
+  ])
 })
 
 describe('Concurrent seat holds', () => {

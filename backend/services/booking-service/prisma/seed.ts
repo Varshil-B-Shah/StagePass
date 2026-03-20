@@ -61,6 +61,30 @@ async function seedPostgres() {
       last_name: 'Test',
     },
   })
+
+  // Dev browser users — match the default subs used in /api/dev/auth
+  await prisma.user.upsert({
+    where: { id: 'dev-user-001' },
+    update: {},
+    create: {
+      id: 'dev-user-001',
+      cognito_id: 'cognito-dev-001',
+      email: 'dev@stagepass.local',
+      first_name: 'Dev',
+      last_name: 'User',
+    },
+  })
+  await prisma.user.upsert({
+    where: { id: 'dev-user-002' },
+    update: {},
+    create: {
+      id: 'dev-user-002',
+      cognito_id: 'cognito-dev-002',
+      email: 'dev2@stagepass.local',
+      first_name: 'Dev',
+      last_name: 'User Two',
+    },
+  })
   console.log('✓ Test user seeded')
 
   // Event
@@ -116,9 +140,8 @@ async function seedDynamo() {
             number: String(i),
             status: 'AVAILABLE',
             tier_id: tierId,
-            held_by: null,
-            hold_expires_at: null,    // Unix ms — set when held (see Chunk 3)
-            hold_expires_at_ttl: null, // Unix seconds — used by DynamoDB TTL (see Chunk 3)
+            // held_by, hold_expires_at, hold_expires_at_ttl omitted when AVAILABLE
+            // DynamoDB does not accept null for GSI key attributes
           },
         },
       })

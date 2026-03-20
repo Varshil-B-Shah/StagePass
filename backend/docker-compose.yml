@@ -8,7 +8,7 @@ services:
       - "8000:8000"
     command: -jar DynamoDBLocal.jar -sharedDb
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000 || exit 1"]
+      test: ["CMD-SHELL", "curl -s http://localhost:8000 > /dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,8 +79,10 @@ services:
       ws-server:
         condition: service_started
     volumes:
-      - ./services/booking-service:/app
+      - ./services/booking-service:/app/services/booking-service
+      - ./shared:/app/shared
       - /app/node_modules
+      - /app/services/booking-service/node_modules
 
   ws-server:
     build:
