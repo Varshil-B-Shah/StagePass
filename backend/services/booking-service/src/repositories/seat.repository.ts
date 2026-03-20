@@ -1,4 +1,5 @@
 import { DynamoDB } from 'aws-sdk'
+import { config } from '../config'
 
 export interface SeatItem {
   PK: string
@@ -27,7 +28,7 @@ export interface UserHoldResult {
   hold_expires_at: number
 }
 
-const TABLE = 'seats'
+const TABLE = () => `${config.dynamo.table_prefix}seats`
 
 export class SeatRepository {
   constructor(private readonly dynamo: DynamoDB.DocumentClient) {}
@@ -35,7 +36,7 @@ export class SeatRepository {
   async getSeatMap(show_id: string): Promise<SeatItem[]> {
     const result = await this.dynamo
       .query({
-        TableName: TABLE,
+        TableName: TABLE(),
         KeyConditionExpression: 'PK = :show',
         ExpressionAttributeValues: { ':show': show_id },
       })
@@ -46,7 +47,7 @@ export class SeatRepository {
   async getSeat(show_id: string, seat_id: string): Promise<SeatItem | null> {
     const result = await this.dynamo
       .get({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
       })
       .promise()
@@ -69,7 +70,7 @@ export class SeatRepository {
 
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :held, held_by = :userId, hold_expires_at = :expiry, hold_expires_at_ttl = :ttl',
@@ -89,7 +90,7 @@ export class SeatRepository {
   async releaseSeat(show_id: string, seat_id: string): Promise<void> {
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :available REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
@@ -102,7 +103,7 @@ export class SeatRepository {
   async confirmSeat(show_id: string, seat_id: string, user_id: string): Promise<void> {
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :booked, booked_by = :userId REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
@@ -124,7 +125,7 @@ export class SeatRepository {
   ): Promise<UserHoldResult[]> {
     const result = await this.dynamo
       .query({
-        TableName: TABLE,
+        TableName: TABLE(),
         IndexName: 'held_by-expires_at-index',
         KeyConditionExpression: 'held_by = :userId',
         FilterExpression: 'show_id = :show AND #status = :held',
