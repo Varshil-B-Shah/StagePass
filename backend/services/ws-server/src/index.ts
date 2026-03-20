@@ -49,6 +49,28 @@ export function createServer(): http.Server {
     res.json({ delivered })
   })
 
+  app.post('/internal/broadcast', (req, res) => {
+    const { channel, event, data } = req.body as { channel: string; event: string; data: unknown }
+    if (!channel || !event) {
+      res.status(400).json({ error: 'channel and event required' })
+      return
+    }
+    const clients = channels.get(channel)
+    if (!clients || clients.size === 0) {
+      res.json({ ok: true, sent: 0 })
+      return
+    }
+    const message = JSON.stringify({ event, data })
+    let sent = 0
+    for (const ws of clients) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message)
+        sent++
+      }
+    }
+    res.json({ ok: true, sent })
+  })
+
   const server = http.createServer(app)
   const wss = new WebSocketServer({ server })
 

@@ -8,7 +8,7 @@ export interface SeatItem {
   seat_id: string
   row: string
   number: string
-  status: 'AVAILABLE' | 'HELD' | 'BOOKED' | 'BLOCKED'
+  status: 'AVAILABLE' | 'HELD' | 'RESERVED' | 'BOOKED' | 'BLOCKED'
   tier_id: string
   held_by: string | null
   hold_expires_at: number | null
@@ -83,6 +83,58 @@ export class SeatRepository {
           ':expiry': hold_expires_at,
           ':ttl': hold_expires_at_ttl,
         },
+      })
+      .promise()
+  }
+
+  /** Transition seat from HELD → RESERVED atomically.
+   *  Used by /api/bookings/checkout before payment is initiated. */
+  async reserveSeat(show_id: string, seat_id: string, user_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression: 'SET #status = :reserved',
+        ConditionExpression: '#status = :held AND held_by = :userId',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':reserved': 'RESERVED',
+          ':held': 'HELD',
+          ':userId': user_id,
+        },
+      })
+      .promise()
+  }
+
+  /** Transition seat from RESERVED → BOOKED (called by ConfirmBooking Lambda). */
+  async confirmReservedSeat(show_id: string, seat_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression:
+          'SET #status = :booked REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
+        ConditionExpression: '#status = :reserved',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':booked': 'BOOKED',
+          ':reserved': 'RESERVED',
+        },
+      })
+      .promise()
+  }
+
+  /** Release a RESERVED seat back to AVAILABLE (called by ExpireHold Lambda on timeout). */
+  async releaseReservedSeat(show_id: string, seat_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression:
+          'SET #status = :available REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
+        ConditionExpression: '#status = :reserved',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':available': 'AVAILABLE', ':reserved': 'RESERVED' },
       })
       .promise()
   }

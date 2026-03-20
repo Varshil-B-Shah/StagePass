@@ -20,6 +20,12 @@ export class RedisRepository {
     return this.client.lRange(`${prefix}user_holds|${user_id}|${show_id}`, 0, -1)
   }
 
+  async holdExists(show_id: string, seat_id: string, user_id: string): Promise<boolean> {
+    const prefix = config.redis_key_prefix
+    const value = await this.client.get(`${prefix}hold|${show_id}|${seat_id}`)
+    return value === user_id
+  }
+
   async delHold(show_id: string, seat_id: string, user_id: string): Promise<void> {
     const prefix = config.redis_key_prefix
     const pipeline = this.client.multi()

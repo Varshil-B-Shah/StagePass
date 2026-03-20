@@ -1,8 +1,16 @@
 node_modules/
 .env
+.env.*
 dist/
 .next/
 *.js.map
+
+# Terraform
+*.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
 coverage/
 .pnpm-store/
 docs

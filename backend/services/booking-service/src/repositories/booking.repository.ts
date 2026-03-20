@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { randomUUID } from 'crypto'
 
-type BookingStatus = 'HOLD' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+type BookingStatus = 'HOLD' | 'RESERVED' | 'CONFIRMED' | 'FAILED' | 'COMPLETED' | 'CANCELLED'
 
 /** Mirrors the Booking model in prisma/schema.prisma.
  *  Once `prisma generate` has run this type will be available from @prisma/client directly.
@@ -10,6 +10,7 @@ export interface Booking {
   id: string
   user_id: string
   event_id: string
+  show_id: string
   seats: string[]
   status: string
   held_until: Date | null
@@ -21,11 +22,9 @@ export interface Booking {
 export interface CreateBookingInput {
   user_id: string
   event_id: string
+  show_id: string
   seat_ids: string[]
   held_until: Date
-  // show_id is not stored in PostgreSQL in Phase 1 (no show_id column on Booking).
-  // DynamoDB is the source of truth for real-time seat state per show.
-  // Phase 2 will add show_id to the Booking schema when payment correlation is needed.
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,6 +46,7 @@ export class BookingRepository {
         id: randomUUID(),
         user_id: input.user_id,
         event_id: input.event_id,
+        show_id: input.show_id,
         seats: input.seat_ids,
         status: 'HOLD',
         held_until: input.held_until,
@@ -54,17 +54,42 @@ export class BookingRepository {
     }) as Promise<Booking>
   }
 
-  /** Returns the most recent active hold for a user across any show.
-   *  Phase 1: one hold per user at a time (enforced by Redis duplicate-hold guard in SeatService).
-   *  Phase 2: add show_id column to Booking and filter here for per-show precision. */
-  async getActiveHoldByUser(user_id: string): Promise<Booking | null> {
+  async getActiveHoldByUser(user_id: string, show_id: string): Promise<Booking | null> {
     return this.db.booking.findFirst({
       where: {
         user_id,
+        show_id,
         status: 'HOLD',
         held_until: { gt: new Date() },
       },
       orderBy: { created_at: 'desc' },
+    }) as Promise<Booking | null>
+  }
+
+  async reserveBooking(booking_id: string): Promise<Booking> {
+    return this.db.booking.update({
+      where: { id: booking_id },
+      data: { status: 'RESERVED' },
+    }) as Promise<Booking>
+  }
+
+  async confirmBooking(booking_id: string, razorpay_order_id: string): Promise<void> {
+    await this.db.booking.update({
+      where: { id: booking_id },
+      data: { status: 'CONFIRMED', payment_intent_id: razorpay_order_id },
+    })
+  }
+
+  async expireBooking(booking_id: string): Promise<void> {
+    await this.db.booking.update({
+      where: { id: booking_id },
+      data: { status: 'FAILED' },
+    })
+  }
+
+  async getBookingById(booking_id: string): Promise<Booking | null> {
+    return this.db.booking.findUnique({
+      where: { id: booking_id },
     }) as Promise<Booking | null>
   }
 

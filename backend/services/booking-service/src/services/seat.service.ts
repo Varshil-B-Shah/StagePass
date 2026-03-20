@@ -53,6 +53,7 @@ export class SeatService {
     this.bookingRepo.createBooking({
       user_id,
       event_id: show_id.split('#')[0],
+      show_id,
       seat_ids: [seat_id],
       held_until: new Date(expires_at),
     }).catch((err) => console.error('[SeatService] createBooking failed (hold still valid):', err.message))
@@ -69,7 +70,7 @@ export class SeatService {
     await this.seatRepo.releaseSeat(show_id, seat_id)
     await this.redisRepo.delHold(show_id, seat_id, user_id)
 
-    const booking = await this.bookingRepo.getActiveHoldByUser(user_id)
+    const booking = await this.bookingRepo.getActiveHoldByUser(user_id, show_id)
     if (booking) {
       await this.bookingRepo.updateBookingStatus(booking.id, 'CANCELLED')
     }
