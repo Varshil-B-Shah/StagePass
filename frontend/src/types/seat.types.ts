@@ -1,4 +1,4 @@
-export type SeatStatus = 'AVAILABLE' | 'HELD' | 'BOOKED' | 'BLOCKED'
+export type SeatStatus = 'AVAILABLE' | 'HELD' | 'RESERVED' | 'BOOKED' | 'BLOCKED'
 
 export interface Seat {
   id: string

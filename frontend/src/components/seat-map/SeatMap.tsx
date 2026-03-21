@@ -1,15 +1,20 @@
 'use client'
 import React from 'react'
+import { useRouter } from 'next/navigation'
 import { useSeatMap } from '@/hooks/useSeatMap'
 import { SeatCell } from './SeatCell'
 import { HoldTimer } from './HoldTimer'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 interface SeatMapProps {
   show_id: string
 }
 
 export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
-  const { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat } = useSeatMap(show_id)
+  const router = useRouter()
+  const { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat, clearHold } = useSeatMap(show_id)
+  const event_id = show_id.split('#')[0]
 
   const handleSeatClick = async (seatId: string) => {
     try {
@@ -17,9 +22,9 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string }
       if (e.status === 409) {
-        alert('Seat just taken — pick another')
+        toast.error('Seat just taken — pick another')
       } else {
-        alert(e.message ?? 'Something went wrong')
+        toast.error(e.message ?? 'Something went wrong')
       }
     }
   }
@@ -42,14 +47,20 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
   return (
     <div className="flex flex-col items-center gap-4">
       {heldSeat && holdExpiresAt && (
-        <div className="flex items-center gap-3 rounded bg-blue-50 px-4 py-2 text-sm">
-          <span className="font-medium text-blue-700">
-            Seat {heldSeat} held —
-          </span>
-          <HoldTimer
-            expireAt={new Date(holdExpiresAt)}
-            onExpire={() => {/* hold expires via WS HOLD_EXPIRED message */}}
-          />
+        <div className="flex flex-col items-center gap-3 rounded bg-blue-50 px-4 py-3 text-sm w-full max-w-xs">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-blue-700">Seat {heldSeat} held —</span>
+            <HoldTimer
+              expireAt={new Date(holdExpiresAt)}
+              onExpire={clearHold}
+            />
+          </div>
+          <Button
+            className="w-full"
+            onClick={() => router.push(`/checkout?show_id=${encodeURIComponent(show_id)}&seat_id=${encodeURIComponent(heldSeat)}&event_id=${encodeURIComponent(event_id)}`)}
+          >
+            Proceed to Checkout
+          </Button>
         </div>
       )}
 
@@ -64,6 +75,7 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
             <SeatCell
               key={seat.id}
               seat={seat}
+              isMyHold={seat.id === heldSeat}
               onClick={() => handleSeatClick(seat.id)}
             />
           ))

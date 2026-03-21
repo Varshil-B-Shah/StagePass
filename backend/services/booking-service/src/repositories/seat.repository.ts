@@ -1,4 +1,5 @@
 import { DynamoDB } from 'aws-sdk'
+import { config } from '../config'
 
 export interface SeatItem {
   PK: string
@@ -7,7 +8,7 @@ export interface SeatItem {
   seat_id: string
   row: string
   number: string
-  status: 'AVAILABLE' | 'HELD' | 'BOOKED' | 'BLOCKED'
+  status: 'AVAILABLE' | 'HELD' | 'RESERVED' | 'BOOKED' | 'BLOCKED'
   tier_id: string
   held_by: string | null
   hold_expires_at: number | null
@@ -27,7 +28,7 @@ export interface UserHoldResult {
   hold_expires_at: number
 }
 
-const TABLE = 'seats'
+const TABLE = () => `${config.dynamo.table_prefix}seats`
 
 export class SeatRepository {
   constructor(private readonly dynamo: DynamoDB.DocumentClient) {}
@@ -35,7 +36,7 @@ export class SeatRepository {
   async getSeatMap(show_id: string): Promise<SeatItem[]> {
     const result = await this.dynamo
       .query({
-        TableName: TABLE,
+        TableName: TABLE(),
         KeyConditionExpression: 'PK = :show',
         ExpressionAttributeValues: { ':show': show_id },
       })
@@ -46,7 +47,7 @@ export class SeatRepository {
   async getSeat(show_id: string, seat_id: string): Promise<SeatItem | null> {
     const result = await this.dynamo
       .get({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
       })
       .promise()
@@ -69,11 +70,11 @@ export class SeatRepository {
 
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :held, held_by = :userId, hold_expires_at = :expiry, hold_expires_at_ttl = :ttl',
-        ConditionExpression: '#status = :available',
+        ConditionExpression: '#status = :available OR (#status = :held AND hold_expires_at < :now)',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':available': 'AVAILABLE',
@@ -81,7 +82,60 @@ export class SeatRepository {
           ':userId': user_id,
           ':expiry': hold_expires_at,
           ':ttl': hold_expires_at_ttl,
+          ':now': Date.now(),
         },
+      })
+      .promise()
+  }
+
+  /** Transition seat from HELD → RESERVED atomically.
+   *  Used by /api/bookings/checkout before payment is initiated. */
+  async reserveSeat(show_id: string, seat_id: string, user_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression: 'SET #status = :reserved',
+        ConditionExpression: '#status = :held AND held_by = :userId',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':reserved': 'RESERVED',
+          ':held': 'HELD',
+          ':userId': user_id,
+        },
+      })
+      .promise()
+  }
+
+  /** Transition seat from RESERVED → BOOKED (called by ConfirmBooking Lambda). */
+  async confirmReservedSeat(show_id: string, seat_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression:
+          'SET #status = :booked REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
+        ConditionExpression: '#status = :reserved',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':booked': 'BOOKED',
+          ':reserved': 'RESERVED',
+        },
+      })
+      .promise()
+  }
+
+  /** Release a RESERVED seat back to AVAILABLE (called by ExpireHold Lambda on timeout). */
+  async releaseReservedSeat(show_id: string, seat_id: string): Promise<void> {
+    await this.dynamo
+      .update({
+        TableName: TABLE(),
+        Key: { PK: show_id, SK: seat_id },
+        UpdateExpression:
+          'SET #status = :available REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
+        ConditionExpression: '#status = :reserved',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':available': 'AVAILABLE', ':reserved': 'RESERVED' },
       })
       .promise()
   }
@@ -89,7 +143,7 @@ export class SeatRepository {
   async releaseSeat(show_id: string, seat_id: string): Promise<void> {
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :available REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
@@ -102,7 +156,7 @@ export class SeatRepository {
   async confirmSeat(show_id: string, seat_id: string, user_id: string): Promise<void> {
     await this.dynamo
       .update({
-        TableName: TABLE,
+        TableName: TABLE(),
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :booked, booked_by = :userId REMOVE held_by, hold_expires_at, hold_expires_at_ttl',
@@ -124,7 +178,7 @@ export class SeatRepository {
   ): Promise<UserHoldResult[]> {
     const result = await this.dynamo
       .query({
-        TableName: TABLE,
+        TableName: TABLE(),
         IndexName: 'held_by-expires_at-index',
         KeyConditionExpression: 'held_by = :userId',
         FilterExpression: 'show_id = :show AND #status = :held',

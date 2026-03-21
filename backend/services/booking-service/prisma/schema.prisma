@@ -4,18 +4,16 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  id         String    @id
-  cognito_id String    @unique
-  email      String    @unique
+  id         String   @id
+  cognito_id String   @unique
+  email      String   @unique
   first_name String
   last_name  String
   phone      String?
-  created_at DateTime  @default(now())
-  bookings   Booking[]
+  created_at DateTime @default(now())
 }
 
 model Venue {
@@ -61,13 +59,13 @@ model PriceTier {
 model Booking {
   id                String    @id
   user_id           String
-  user              User      @relation(fields: [user_id], references: [id])
   event_id          String
   event             Event     @relation(fields: [event_id], references: [id])
+  show_id           String    // Added Phase 2 — DynamoDB show composite key
   seats             String[]
-  status            String    // "HOLD" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
+  status            String    // "HOLD" | "RESERVED" | "CONFIRMED" | "FAILED" | "COMPLETED" | "CANCELLED"
   held_until        DateTime?
-  payment_intent_id String?   // Phase 2
+  payment_intent_id String?   // Stores razorpay_order_id in Phase 2
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 }

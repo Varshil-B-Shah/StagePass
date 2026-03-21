@@ -26,10 +26,21 @@ export function useSeatMap(show_id: string) {
     }
   }, [show_id])
 
-  // Initial REST fetch on mount
+  // Initial REST fetch + restore any active hold on mount (survives page refresh)
   useEffect(() => {
     fetchSeatMap()
-  }, [fetchSeatMap])
+
+    fetch(`/api/events/${encodeURIComponent(show_id)}/user-holds`)
+      .then((r) => r.json())
+      .then((data: { holds?: Array<{ seat_id: string; expires_at: number }> }) => {
+        const hold = data.holds?.[0]
+        if (hold && hold.expires_at > Date.now()) {
+          setHeldSeat(hold.seat_id)
+          setHoldExpiresAt(hold.expires_at)
+        }
+      })
+      .catch(() => {})
+  }, [show_id, fetchSeatMap])
 
   // WebSocket connection lifecycle
   useEffect(() => {
@@ -55,6 +66,9 @@ export function useSeatMap(show_id: string) {
           // Use local `socket` ref — ws.current may point to a newer socket
           // if React StrictMode double-invoked this effect.
           socket.send(JSON.stringify({ action: 'subscribe', channel: `show:${show_id}` }))
+          // Re-fetch after subscribing to catch any updates missed between the
+          // initial REST fetch and this WS subscription being registered.
+          fetchSeatMap()
         }
 
         socket.onmessage = (event) => {
@@ -149,5 +163,23 @@ export function useSeatMap(show_id: string) {
     return { ...data, expires_at: expiresAtMs }
   }
 
-  return { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat }
+  const clearHold = useCallback(async () => {
+    const seatId = heldSeat
+    setHeldSeat(null)
+    setHoldExpiresAt(null)
+
+    if (seatId) {
+      // Explicitly release the hold on the backend — this triggers a WS broadcast
+      // so all other clients (User 2, etc.) see the seat go green immediately.
+      fetch('/api/bookings/hold', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id, seat_id: seatId }),
+      }).catch(() => {})
+    }
+
+    fetchSeatMap()
+  }, [show_id, heldSeat, fetchSeatMap])
+
+  return { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat, clearHold }
 }

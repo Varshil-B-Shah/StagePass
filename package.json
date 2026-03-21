@@ -2,6 +2,11 @@
   "name": "stagepass",
   "private": true,
   "packageManager": "pnpm@8.15.0",
+  "pnpm": {
+    "overrides": {
+      "@types/pg": "8.11.11"
+    }
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter frontend --filter booking-service --filter ws-server dev",
     "build": "pnpm --recursive build",

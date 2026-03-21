@@ -29,7 +29,7 @@ async function start() {
   const subscriber = new RedisSubscriber(seatService)
   await subscriber.start()
 
-  const app = createApp(seatService)
+  const app = await createApp(seatService, wsService)
   app.listen(config.port, () => {
     console.log(`[booking-service] listening on :${config.port}`)
   })

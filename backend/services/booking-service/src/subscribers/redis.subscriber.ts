@@ -14,13 +14,16 @@ export class RedisSubscriber {
 
     await this.client.configSet('notify-keyspace-events', 'Ex')
 
-    await this.client.subscribe('__keyevent@0__:expired', async (key) => {
-      if (!key.startsWith('hold|')) return
+    const holdKeyPrefix = `${config.redis_key_prefix}hold|`
 
-      const firstPipe = key.indexOf('|')
-      const lastPipe = key.lastIndexOf('|')
-      const show_id = key.slice(firstPipe + 1, lastPipe)
-      const seat_id = key.slice(lastPipe + 1)
+    await this.client.subscribe('__keyevent@0__:expired', async (key) => {
+      if (!key.startsWith(holdKeyPrefix)) return
+
+      // Strip prefix → `{show_id}|{seat_id}`
+      const keyPart = key.slice(holdKeyPrefix.length)
+      const lastPipe = keyPart.lastIndexOf('|')
+      const show_id = keyPart.slice(0, lastPipe)
+      const seat_id = keyPart.slice(lastPipe + 1)
 
       try {
         await this.seatService.releaseHold(show_id, seat_id)

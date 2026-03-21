@@ -53,6 +53,7 @@ export class SeatService {
     this.bookingRepo.createBooking({
       user_id,
       event_id: show_id.split('#')[0],
+      show_id,
       seat_ids: [seat_id],
       held_until: new Date(expires_at),
     }).catch((err) => console.error('[SeatService] createBooking failed (hold still valid):', err.message))
@@ -69,7 +70,7 @@ export class SeatService {
     await this.seatRepo.releaseSeat(show_id, seat_id)
     await this.redisRepo.delHold(show_id, seat_id, user_id)
 
-    const booking = await this.bookingRepo.getActiveHoldByUser(user_id)
+    const booking = await this.bookingRepo.getActiveHoldByUser(user_id, show_id)
     if (booking) {
       await this.bookingRepo.updateBookingStatus(booking.id, 'CANCELLED')
     }
@@ -82,13 +83,30 @@ export class SeatService {
 
   async getSeatMap(show_id: string): Promise<SeatMapResponse> {
     const seats = await this.seatRepo.getSeatMap(show_id)
+    const now = Date.now()
+    const expiredSeats: string[] = []
 
     const rowMap = new Map<string, Array<{ id: string; row: string; number: string; status: SeatItem['status']; tier_id: string }>>()
 
     for (const seat of seats) {
       if (!rowMap.has(seat.row)) rowMap.set(seat.row, [])
       const { held_by, hold_expires_at, hold_expires_at_ttl, PK, SK, seat_id, ...rest } = seat
+
+      // Lazy expiry: if hold has expired but DynamoDB wasn't updated, release it now
+      if (rest.status === 'HELD' && hold_expires_at && hold_expires_at < now) {
+        rest.status = 'AVAILABLE'
+        expiredSeats.push(seat_id)
+      }
+
       rowMap.get(seat.row)!.push({ id: seat_id, ...rest })
+    }
+
+    // Fire-and-forget fallback: release any stale held seats found during fetch.
+    // Normal expiry path goes through DELETE /api/seats/hold (with WS broadcast).
+    if (expiredSeats.length > 0) {
+      Promise.allSettled(
+        expiredSeats.map((id) => this.releaseHold(show_id, id))
+      ).catch(() => {})
     }
 
     return {
@@ -102,19 +120,28 @@ export class SeatService {
     }
   }
 
-  async getUserHolds(show_id: string, user_id: string): Promise<string[]> {
+  async getUserHolds(
+    show_id: string,
+    user_id: string
+  ): Promise<Array<{ seat_id: string; expires_at: number }>> {
     const redisHolds = await this.redisRepo.getUserHolds(show_id, user_id)
-    if (redisHolds.length > 0) return redisHolds
+
+    // Redis holds: look up expiry from DynamoDB to return full data
+    if (redisHolds.length > 0) {
+      const dynamoHolds = await this.seatRepo.getUserHoldsFromDynamo(show_id, user_id)
+      return dynamoHolds
+        .filter((h) => redisHolds.includes(h.seat_id) && h.hold_expires_at > Date.now())
+        .map((h) => ({ seat_id: h.seat_id, expires_at: h.hold_expires_at }))
+    }
 
     const dynamoHolds = await this.seatRepo.getUserHoldsFromDynamo(show_id, user_id)
     if (dynamoHolds.length === 0) return []
 
-    for (const { seat_id, hold_expires_at } of dynamoHolds) {
-      const remainingMs = hold_expires_at - Date.now()
-      if (remainingMs <= 0) continue
-      await this.redisRepo.setHold(show_id, seat_id, user_id, Math.ceil(remainingMs / 1000))
+    const active = dynamoHolds.filter((h) => h.hold_expires_at > Date.now())
+    for (const { seat_id, hold_expires_at } of active) {
+      await this.redisRepo.setHold(show_id, seat_id, user_id, Math.ceil((hold_expires_at - Date.now()) / 1000))
     }
 
-    return dynamoHolds.map((h) => h.seat_id)
+    return active.map((h) => ({ seat_id: h.seat_id, expires_at: h.hold_expires_at }))
   }
 }

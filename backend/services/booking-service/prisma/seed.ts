@@ -1,13 +1,20 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 import { DynamoDB } from 'aws-sdk'
 
-const prisma = new PrismaClient()
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
+
+const TABLE_PREFIX = process.env.TABLE_PREFIX || 'dev_'
 
 const dynamo = new DynamoDB.DocumentClient({
-  endpoint: process.env.DYNAMODB_ENDPOINT || 'http://localhost:8000',
+  endpoint: process.env.DYNAMODB_ENDPOINT || undefined,
   region: process.env.AWS_REGION || 'us-east-1',
-  accessKeyId: 'local',
-  secretAccessKey: 'local',
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'local',
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'local',
 })
 
 // Deterministic IDs so the seed is idempotent
@@ -153,7 +160,7 @@ async function seedDynamo() {
   for (let i = 0; i < items.length; i += 25) {
     await dynamo.batchWrite({
       RequestItems: {
-        seats: items.slice(i, i + 25),
+        [`${TABLE_PREFIX}seats`]: items.slice(i, i + 25),
       },
     }).promise()
   }
