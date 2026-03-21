@@ -234,11 +234,6 @@ StagePass/
 │       ├── send-email/                # Sends confirmation email via SES
 │       ├── expire-hold/               # Releases expired seat holds
 │       └── update-stream-state/       # Updates stream state on IVS events
-│
-└── docs/
-    └── superpowers/
-        ├── specs/                     # Design documents for each phase
-        └── plans/                     # Implementation plans for each phase
 ```
 
 ---
