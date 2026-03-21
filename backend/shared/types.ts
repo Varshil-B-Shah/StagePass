@@ -1,5 +1,5 @@
 // Seat states
-export type SeatStatus = 'AVAILABLE' | 'HELD' | 'BOOKED' | 'BLOCKED'
+export type SeatStatus = 'AVAILABLE' | 'HELD' | 'RESERVED' | 'BOOKED' | 'BLOCKED'
 
 // A single seat as stored/returned by the booking service
 export interface Seat {

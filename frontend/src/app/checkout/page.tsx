@@ -1,8 +1,9 @@
 'use client'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 declare global {
   interface Window {
@@ -18,6 +19,7 @@ function CheckoutForm() {
   const event_id = params.get('event_id') || ''
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const paymentSucceeded = useRef(false)
 
   // Load Razorpay script
   useEffect(() => {
@@ -41,6 +43,8 @@ function CheckoutForm() {
       }
       if (!res.ok) { setError(data.error || 'Failed'); setLoading(false); return }
 
+      const bookingId = data.booking_id
+
       const rzp = new window.Razorpay({
         key: data.key_id,
         order_id: data.order_id,
@@ -49,9 +53,27 @@ function CheckoutForm() {
         name: 'StagePass',
         description: `Seat ${seat_id}`,
         handler: () => {
-          router.push(`/booking/${data.booking_id}`)
+          paymentSucceeded.current = true
+          toast.success('Booking confirmed! Your ticket is reserved.', { duration: 5000 })
+          router.push('/')
         },
-        modal: { ondismiss: () => setLoading(false) },
+        modal: {
+          ondismiss: async () => {
+            // Razorpay sometimes fires ondismiss in the same tick as handler.
+            // Wait one microtask cycle so handler can set paymentSucceeded first.
+            await new Promise(r => setTimeout(r, 300))
+            if (paymentSucceeded.current) return
+            try {
+              await fetch(`/api/bookings/${bookingId}`, { method: 'DELETE' })
+            } catch {
+              // best effort
+            }
+            setLoading(false)
+            router.push(
+              `/events/${event_id}?show_id=${encodeURIComponent(show_id)}`
+            )
+          },
+        },
       })
       rzp.open()
     } catch {

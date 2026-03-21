@@ -5,6 +5,7 @@ import { useSeatMap } from '@/hooks/useSeatMap'
 import { SeatCell } from './SeatCell'
 import { HoldTimer } from './HoldTimer'
 import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 interface SeatMapProps {
   show_id: string
@@ -12,7 +13,7 @@ interface SeatMapProps {
 
 export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
   const router = useRouter()
-  const { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat } = useSeatMap(show_id)
+  const { seatMap, loading, error, heldSeat, holdExpiresAt, holdSeat, clearHold } = useSeatMap(show_id)
   const event_id = show_id.split('#')[0]
 
   const handleSeatClick = async (seatId: string) => {
@@ -21,9 +22,9 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string }
       if (e.status === 409) {
-        alert('Seat just taken — pick another')
+        toast.error('Seat just taken — pick another')
       } else {
-        alert(e.message ?? 'Something went wrong')
+        toast.error(e.message ?? 'Something went wrong')
       }
     }
   }
@@ -51,7 +52,7 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
             <span className="font-medium text-blue-700">Seat {heldSeat} held —</span>
             <HoldTimer
               expireAt={new Date(holdExpiresAt)}
-              onExpire={() => {/* hold expires via WS HOLD_EXPIRED message */}}
+              onExpire={clearHold}
             />
           </div>
           <Button
@@ -74,6 +75,7 @@ export const SeatMap: React.FC<SeatMapProps> = ({ show_id }) => {
             <SeatCell
               key={seat.id}
               seat={seat}
+              isMyHold={seat.id === heldSeat}
               onClick={() => handleSeatClick(seat.id)}
             />
           ))

@@ -24,6 +24,10 @@ resource "aws_cognito_user_pool" "main" {
     required            = false
     mutable             = true
   }
+
+  lifecycle {
+    ignore_changes = [schema]
+  }
 }
 
 resource "aws_cognito_user_pool_client" "main" {

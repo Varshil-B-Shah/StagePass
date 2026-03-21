@@ -6,6 +6,8 @@ export function createBookingRouter(controller: BookingController): Router {
   router.post('/checkout', controller.checkout)
   router.post('/confirm', controller.confirm)
   router.post('/expire', controller.expire)
+  router.get('/my', controller.myBookings)
   router.get('/:id', controller.getById)
+  router.delete('/:id', controller.release)
   return router
 }

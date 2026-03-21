@@ -8,6 +8,7 @@ import { createBookingRouter } from './routes/booking.routes'
 import { SeatService } from './services/seat.service'
 import { BookingService } from './services/booking.service'
 import { BookingController } from './controllers/booking.controller'
+import { IWsService } from './services/ws.service'
 import { BookingRepository } from './repositories/booking.repository'
 import { RedisRepository } from './repositories/redis.repository'
 import { SeatRepository } from './repositories/seat.repository'
@@ -16,7 +17,7 @@ import { getDynamoClient } from './clients/dynamo.client'
 import { getRedisClient } from './clients/redis.client'
 import { prisma } from './clients/prisma.client'
 
-export async function createApp(seatService: SeatService) {
+export async function createApp(seatService: SeatService, wsService: IWsService) {
   const app = express()
   app.use(express.json())
   app.use(healthRouter)
@@ -26,7 +27,7 @@ export async function createApp(seatService: SeatService) {
   const redisRepo = new RedisRepository(redisClient)
   const seatRepo = new SeatRepository(getDynamoClient())
   const bookingRepo = new BookingRepository(prisma)
-  const bookingService = new BookingService(seatRepo, bookingRepo, redisRepo)
+  const bookingService = new BookingService(seatRepo, bookingRepo, redisRepo, wsService)
   const bookingController = new BookingController(bookingService)
 
   app.use(authMiddleware)

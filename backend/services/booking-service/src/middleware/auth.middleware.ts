@@ -13,6 +13,7 @@ declare global {
 }
 
 const PUBLIC_PATHS = ['/healthz', '/ready']
+const INTERNAL_PATHS = ['/api/bookings/confirm', '/api/bookings/expire']
 
 function verifyLocal(token: string): JwtPayload {
   if (!config.jwt_secret) throw new Error('JWT_SECRET not set')
@@ -44,6 +45,16 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return
   }
 
+  // Internal service calls use x-internal-secret instead of JWT
+  if (INTERNAL_PATHS.includes(req.path)) {
+    if (req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET) {
+      next()
+      return
+    }
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+
   const auth = req.headers.authorization
   if (!auth || !auth.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing or invalid Authorization header' })
@@ -52,17 +63,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
   const token = auth.slice(7)
 
-  if (config.node_env !== 'production') {
-    try {
-      req.user = verifyLocal(token)
-      next()
-    } catch {
-      res.status(401).json({ error: 'Invalid token' })
-    }
-    return
-  }
-
-  // Production: async JWKS verification
+  // Always use Cognito JWKS — tokens are Cognito-issued in all environments
   verifyProd(token)
     .then((user) => {
       req.user = user

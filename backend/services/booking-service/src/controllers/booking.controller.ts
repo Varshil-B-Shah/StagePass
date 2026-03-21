@@ -43,6 +43,28 @@ export class BookingController {
     } catch (err) { next(err) }
   }
 
+  release = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user_id = req.user?.sub
+      if (!user_id) return res.status(401).json({ error: 'Unauthorized' })
+      await this.bookingService.release(req.params.id, user_id)
+      return res.json({ ok: true })
+    } catch (err: unknown) {
+      const e = err as { status?: number; message: string }
+      if (e.status) return res.status(e.status).json({ error: e.message })
+      next(err)
+    }
+  }
+
+  myBookings = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user_id = req.user?.sub
+      if (!user_id) return res.status(401).json({ error: 'Unauthorized' })
+      const bookings = await this.bookingService.getMyBookings(user_id)
+      return res.json({ bookings })
+    } catch (err) { next(err) }
+  }
+
   checkout = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user_id = req.headers['x-user-id'] as string

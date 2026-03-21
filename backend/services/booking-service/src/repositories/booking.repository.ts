@@ -102,4 +102,11 @@ export class BookingRepository {
       data: { status },
     }) as Promise<Booking>
   }
+
+  async getBookingsByUser(user_id: string): Promise<Booking[]> {
+    return this.db.booking.findMany({
+      where: { user_id, status: 'CONFIRMED' },
+      orderBy: { created_at: 'desc' },
+    }) as Promise<Booking[]>
+  }
 }

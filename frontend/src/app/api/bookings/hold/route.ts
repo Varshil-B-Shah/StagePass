@@ -19,3 +19,20 @@ export async function POST(req: Request) {
   const data = await response.json()
   return NextResponse.json(data, { status: response.status })
 }
+
+export async function DELETE(req: Request) {
+  const accessToken = req.headers.get('x-access-token')
+  const body = await req.json()
+
+  const response = await fetch(`${BOOKING_SERVICE_URL}/api/bookings/hold`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data = await response.json().catch(() => ({ ok: true }))
+  return NextResponse.json(data, { status: response.status })
+}

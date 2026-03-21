@@ -65,12 +65,16 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
     console.error('[webhook] delete task failed:', e)
   )
 
-  // Resume Step Functions
-  await sendTaskSuccess(task.task_token, {
-    booking_id: task.booking_id,
-    show_id: task.show_id,
-    razorpay_order_id,
-  })
+  // Resume Step Functions only when a real task token exists.
+  // task_token is '' when Step Functions hasn't stored its token yet
+  // (e.g. local dev without a running state machine).
+  if (task.task_token) {
+    await sendTaskSuccess(task.task_token, {
+      booking_id: task.booking_id,
+      show_id: task.show_id,
+      razorpay_order_id,
+    })
+  }
 
   return res.status(200).json({ ok: true })
 })

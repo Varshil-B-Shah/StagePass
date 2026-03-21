@@ -77,18 +77,12 @@ export async function middleware(req: NextRequest) {
 }
 
 async function verifyAccessToken(token: string): Promise<{ sub?: string; email?: string }> {
-  if (process.env.NODE_ENV === 'production') {
-    const jwksUrl = new URL(
-      `https://cognito-idp.${process.env.COGNITO_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`
-    )
-    const JWKS = createRemoteJWKSet(jwksUrl)
-    const { payload } = await jwtVerify(token, JWKS)
-    return payload as { sub?: string; email?: string }
-  } else {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { sub?: string; email?: string }
-  }
+  const jwksUrl = new URL(
+    `https://cognito-idp.${process.env.COGNITO_REGION ?? 'us-east-1'}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`
+  )
+  const JWKS = createRemoteJWKSet(jwksUrl)
+  const { payload } = await jwtVerify(token, JWKS)
+  return payload as { sub?: string; email?: string }
 }
 
 function isExpiredError(err: unknown): boolean {

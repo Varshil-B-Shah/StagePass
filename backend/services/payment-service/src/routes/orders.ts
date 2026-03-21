@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createRazorpayOrder } from '../lib/razorpay'
 import { startPaymentExecution } from '../lib/stepfunctions'
+import { savePaymentTask } from '../lib/dynamo'
 import { config } from '../config'
 
 export const ordersRouter = Router()
@@ -37,8 +38,21 @@ ordersRouter.post('/create-order', async (req: Request, res: Response) => {
     // Create Razorpay order (₹500 — price tier support added in Phase 3)
     const order = await createRazorpayOrder(50000)
 
-    // Start Step Functions — Lambda will save the task_token to DynamoDB
-    await startPaymentExecution({ booking_id, show_id, razorpay_order_id: order.id })
+    // Save task record NOW so the webhook always finds booking_id regardless of
+    // Step Functions Lambda timing. task_token is empty string — the webhook only
+    // calls sendTaskSuccess when a real token is present (set by the Lambda later).
+    await savePaymentTask({
+      razorpay_order_id: order.id,
+      booking_id,
+      show_id,
+      task_token: '',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    })
+
+    // Start Step Functions — Lambda will overwrite task_token in the same record
+    startPaymentExecution({ booking_id, show_id, razorpay_order_id: order.id }).catch(
+      (err) => console.error('[payment] Step Functions start failed (non-fatal):', err.message)
+    )
 
     return res.json({
       order_id: order.id,

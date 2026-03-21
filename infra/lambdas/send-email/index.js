@@ -12,7 +12,7 @@ exports.handler = async (event) => {
   const booking = await bookingRes.json()
 
   await ses.sendEmail({
-    Source: process.env.SES_FROM_EMAIL || 'noreply@stagepass.in',
+    Source: process.env.SES_FROM_EMAIL || 'varshilshah.work@gmail.com',
     Destination: { ToAddresses: [booking.user?.email || booking.email] },
     Message: {
       Subject: { Data: `Booking Confirmed — ${booking_id}` },

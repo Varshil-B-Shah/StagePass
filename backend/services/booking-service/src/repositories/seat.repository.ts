@@ -74,7 +74,7 @@ export class SeatRepository {
         Key: { PK: show_id, SK: seat_id },
         UpdateExpression:
           'SET #status = :held, held_by = :userId, hold_expires_at = :expiry, hold_expires_at_ttl = :ttl',
-        ConditionExpression: '#status = :available',
+        ConditionExpression: '#status = :available OR (#status = :held AND hold_expires_at < :now)',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':available': 'AVAILABLE',
@@ -82,6 +82,7 @@ export class SeatRepository {
           ':userId': user_id,
           ':expiry': hold_expires_at,
           ':ttl': hold_expires_at_ttl,
+          ':now': Date.now(),
         },
       })
       .promise()

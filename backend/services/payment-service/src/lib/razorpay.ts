@@ -23,6 +23,10 @@ export async function createRazorpayOrder(amountPaise: number): Promise<Razorpay
 }
 
 export function verifyWebhookSignature(body: string, signature: string): boolean {
+  if (!config.razorpay.webhook_secret || config.razorpay.webhook_secret === 'placeholder') {
+    console.warn('[razorpay] webhook signature verification skipped (no secret configured)')
+    return true
+  }
   const expected = createHmac('sha256', config.razorpay.webhook_secret)
     .update(body)
     .digest('hex')
