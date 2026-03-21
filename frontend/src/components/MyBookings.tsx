@@ -33,7 +33,10 @@ export function MyBookings() {
       <h2 className="text-2xl font-bold mb-6">My Bookings</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         {bookings.map((booking) => {
-          const [eventId, date, time] = booking.show_id.split('#')
+          const parts = booking.show_id?.split('#') ?? []
+          const eventId = parts[0] ?? booking.event_id ?? 'Unknown'
+          const date = parts[1] ?? ''
+          const time = parts[2] ?? ''
           return (
             <Card key={booking.id}>
               <CardHeader className="pb-2">

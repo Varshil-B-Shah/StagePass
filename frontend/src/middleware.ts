@@ -11,12 +11,22 @@ const PUBLIC_PATHS = [
   '/api/auth/logout',
 ]
 
+// Stream status + chat history are public (no login required to see if a stream is live)
+const PUBLIC_PATTERNS = [
+  /^\/api\/streams\/[^/]+$/,          // GET /api/streams/:event_id
+  /^\/api\/streams\/[^/]+\/chat$/,    // GET /api/streams/:event_id/chat
+]
+
 export async function middleware(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith('/api')) {
     return NextResponse.next()
   }
 
   if (PUBLIC_PATHS.includes(req.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
+
+  if (PUBLIC_PATTERNS.some((p) => p.test(req.nextUrl.pathname))) {
     return NextResponse.next()
   }
 

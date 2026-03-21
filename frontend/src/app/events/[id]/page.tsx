@@ -14,6 +14,12 @@ export default function EventPage({ params }: EventPageProps) {
       >
         Select seats
       </a>
+      <a
+        href={`/stream/${params.id}`}
+        className="inline-block rounded bg-red-600 px-5 py-2 text-white hover:bg-red-700 ml-3"
+      >
+        Watch Live
+      </a>
     </main>
   )
 }
