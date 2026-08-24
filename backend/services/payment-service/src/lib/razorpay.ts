@@ -32,3 +32,34 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
     .digest('hex')
   return expected === signature
 }
+
+export interface RazorpayRefund {
+  id: string
+  status: string
+  amount: number
+}
+
+/**
+ * Issues a refund against a captured payment.
+ * Refunds are raised on the payment (pay_...), never on the order (order_...).
+ * Omitting amountPaise refunds the full captured amount.
+ *
+ * Razorpay settles refunds asynchronously: this returns status 'pending',
+ * and the money reaches the customer hours later. The `refund.processed`
+ * webhook is what confirms settlement.
+ */
+export async function refundPayment(
+  payment_id: string,
+  amountPaise?: number
+): Promise<RazorpayRefund> {
+  const params: Record<string, unknown> = { speed: 'normal' }
+  if (amountPaise !== undefined) params.amount = amountPaise
+
+  // The SDK's refund typings are loose across 2.x — cast the result shape we rely on.
+  const refund = (await razorpay.payments.refund(
+    payment_id,
+    params as never
+  )) as unknown as { id: string; status: string; amount: number }
+
+  return { id: refund.id, status: refund.status, amount: refund.amount }
+}

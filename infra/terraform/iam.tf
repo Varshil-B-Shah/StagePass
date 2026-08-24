@@ -31,13 +31,14 @@ resource "aws_iam_role_policy" "step_functions_lambda" {
           aws_lambda_function.confirm_booking.arn,
           aws_lambda_function.send_email.arn,
           aws_lambda_function.expire_hold.arn,
+          aws_lambda_function.refund_payment.arn,
         ]
       },
     ]
   })
 }
 
-# ── Lambda execution role (shared by all 3 Lambdas) ──────────────────────────
+# ── Lambda execution role (shared by all 4 Lambdas) ──────────────────────────
 
 resource "aws_iam_role" "lambda" {
   name = "stagepass-lambda-${var.env}"
@@ -82,6 +83,7 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Effect = "Allow"
         Action = [
           "dynamodb:GetItem",
+          "dynamodb:PutItem",
           "dynamodb:DeleteItem",
         ]
         Resource = aws_dynamodb_table.payment_tasks.arn

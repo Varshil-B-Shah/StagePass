@@ -13,7 +13,27 @@ declare global {
 }
 
 const PUBLIC_PATHS = ['/healthz', '/ready']
-const INTERNAL_PATHS = ['/api/bookings/confirm', '/api/bookings/expire']
+
+// Machine-to-machine routes: payment-service and the compensation Lambdas call
+// these with x-internal-secret and no user token.
+const INTERNAL_PATHS = [
+  '/api/bookings/confirm',
+  '/api/bookings/expire',
+  '/api/bookings/payment',
+  '/api/bookings/refund',
+  '/api/bookings/refund-settled',
+]
+
+/** GET /api/bookings/:id is dual-use — the Lambdas read it with the shared secret,
+ *  while a browser reaches the same handler with a JWT. '/my' is user-only and is
+ *  excluded so it can never be reached without a token. */
+function isInternalReadable(req: Request): boolean {
+  return (
+    req.method === 'GET' &&
+    /^\/api\/bookings\/[^/]+$/.test(req.path) &&
+    req.path !== '/api/bookings/my'
+  )
+}
 
 function verifyLocal(token: string): JwtPayload {
   if (!config.jwt_secret) throw new Error('JWT_SECRET not set')
@@ -45,13 +65,23 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return
   }
 
-  // Internal service calls use x-internal-secret instead of JWT
+  // Internal service calls use x-internal-secret instead of a JWT.
+  const secret = req.headers['x-internal-secret']
+  const secretValid = Boolean(secret) && secret === process.env.INTERNAL_API_SECRET
+
   if (INTERNAL_PATHS.includes(req.path)) {
-    if (req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET) {
+    if (secretValid) {
       next()
       return
     }
     res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+
+  // Dual-use route: a valid secret authenticates the caller, anything else falls
+  // through to the normal JWT check below.
+  if (secretValid && isInternalReadable(req)) {
+    next()
     return
   }
 

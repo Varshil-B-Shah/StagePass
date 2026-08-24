@@ -34,6 +34,43 @@ export class BookingController {
     } catch (err) { next(err) }
   }
 
+  recordPayment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!this.checkInternal(req, res)) return
+      const { booking_id, razorpay_payment_id } = req.body
+      if (!booking_id || !razorpay_payment_id) {
+        return res.status(400).json({ error: 'booking_id and razorpay_payment_id required' })
+      }
+      await this.bookingService.recordPayment(booking_id, razorpay_payment_id)
+      return res.json({ ok: true })
+    } catch (err) { next(err) }
+  }
+
+  recordRefund = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!this.checkInternal(req, res)) return
+      const { booking_id, refund_id, refund_status } = req.body
+      if (!booking_id || !refund_id) {
+        return res.status(400).json({ error: 'booking_id and refund_id required' })
+      }
+      await this.bookingService.recordRefund(booking_id, refund_id, refund_status ?? 'pending')
+      return res.json({ ok: true })
+    } catch (err) { next(err) }
+  }
+
+  recordRefundSettlement = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!this.checkInternal(req, res)) return
+      const { refund_id, refund_status } = req.body
+      if (!refund_id || !refund_status) {
+        return res.status(400).json({ error: 'refund_id and refund_status required' })
+      }
+      const matched = await this.bookingService.recordRefundSettlement(refund_id, refund_status)
+      // 200 even when nothing matched, so Razorpay stops retrying an unknown refund.
+      return res.json({ ok: true, matched })
+    } catch (err) { next(err) }
+  }
+
   getById = async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!this.checkInternal(req, res)) return

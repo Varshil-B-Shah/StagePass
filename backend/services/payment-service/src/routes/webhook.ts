@@ -2,9 +2,18 @@ import { Router, Request, Response } from 'express'
 import { verifyWebhookSignature } from '../lib/razorpay'
 import { getPaymentTask, deletePaymentTask } from '../lib/dynamo'
 import { sendTaskSuccess } from '../lib/stepfunctions'
+import { recordPayment, recordRefundSettlement } from '../lib/booking.client'
 import { config } from '../config'
 
 export const webhookRouter = Router()
+
+interface RazorpayWebhookBody {
+  event: string
+  payload?: {
+    payment?: { entity?: { id?: string; order_id?: string } }
+    refund?: { entity?: { id?: string; status?: string; payment_id?: string } }
+  }
+}
 
 webhookRouter.post('/webhook', async (req: Request, res: Response) => {
   const signature = req.headers['x-razorpay-signature'] as string
@@ -18,16 +27,25 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid signature' })
   }
 
-  const payload = JSON.parse(rawBody.toString()) as {
-    event: string
-    payload?: { payment?: { entity?: { order_id?: string } } }
+  const payload = JSON.parse(rawBody.toString()) as RazorpayWebhookBody
+
+  if (payload.event === 'payment.captured') {
+    return handlePaymentCaptured(payload, res)
   }
 
-  if (payload.event !== 'payment.captured') {
-    return res.status(200).json({ ok: true })
+  // Refunds settle asynchronously — these close the loop hours after we raise one.
+  if (payload.event === 'refund.processed' || payload.event === 'refund.failed') {
+    return handleRefundSettled(payload, res)
   }
 
-  const razorpay_order_id = payload.payload?.payment?.entity?.order_id
+  return res.status(200).json({ ok: true })
+})
+
+async function handlePaymentCaptured(payload: RazorpayWebhookBody, res: Response) {
+  const entity = payload.payload?.payment?.entity
+  const razorpay_order_id = entity?.order_id
+  const razorpay_payment_id = entity?.id
+
   if (!razorpay_order_id) {
     return res.status(200).json({ ok: true })
   }
@@ -45,6 +63,18 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
     return res.status(200).json({ ok: true })  // Razorpay won't retry on 200
   }
 
+  // Record the payment id BEFORE attempting delivery. If confirmation then fails,
+  // the compensation path still knows which payment to refund. Failing here is
+  // worth a retry: without the payment id a captured payment is unrefundable.
+  if (razorpay_payment_id) {
+    try {
+      await recordPayment(task.booking_id, razorpay_payment_id)
+    } catch (err) {
+      console.error('[webhook] recordPayment failed:', (err as Error).message)
+      return res.status(500).json({ error: 'Could not record payment' })
+    }
+  }
+
   // Confirm booking in booking-service before calling SendTaskSuccess
   const confirmRes = await fetch(`${config.booking_service_url}/api/bookings/confirm`, {
     method: 'POST',
@@ -56,6 +86,9 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
   })
 
   if (!confirmRes.ok) {
+    // Leave the task in place and fail loudly. Razorpay retries; if it never
+    // succeeds the state machine times out and the RefundPayment state returns
+    // the money, because the payment id was recorded above.
     console.error('[webhook] booking confirm failed:', await confirmRes.json())
     return res.status(500).json({ error: 'Booking confirmation failed' })
   }
@@ -77,4 +110,21 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
   }
 
   return res.status(200).json({ ok: true })
-})
+}
+
+async function handleRefundSettled(payload: RazorpayWebhookBody, res: Response) {
+  const refund = payload.payload?.refund?.entity
+  if (!refund?.id) {
+    return res.status(200).json({ ok: true })
+  }
+
+  try {
+    await recordRefundSettlement(refund.id, refund.status ?? 'processed')
+    console.log('[webhook] refund settled', { refund_id: refund.id, status: refund.status })
+  } catch (err) {
+    console.error('[webhook] refund settlement failed:', (err as Error).message)
+    return res.status(500).json({ error: 'Could not record refund settlement' })
+  }
+
+  return res.status(200).json({ ok: true })
+}

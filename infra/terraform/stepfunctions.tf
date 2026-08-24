@@ -12,6 +12,12 @@ data "archive_file" "send_email" {
   output_path = "${path.module}/../lambdas/send-email.zip"
 }
 
+data "archive_file" "refund_payment" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambdas/refund-payment"
+  output_path = "${path.module}/../lambdas/refund-payment.zip"
+}
+
 data "archive_file" "expire_hold" {
   type        = "zip"
   source_dir  = "${path.module}/../lambdas/expire-hold"
@@ -29,8 +35,8 @@ resource "aws_lambda_function" "confirm_booking" {
 
   environment {
     variables = {
-      TABLE_PREFIX     = "${var.env}_"
-      WS_INTERNAL_URL  = var.ws_internal_url
+      TABLE_PREFIX    = "${var.env}_"
+      WS_INTERNAL_URL = var.ws_internal_url
     }
   }
 }
@@ -72,6 +78,23 @@ resource "aws_lambda_function" "expire_hold" {
   }
 }
 
+resource "aws_lambda_function" "refund_payment" {
+  function_name    = "stagepass-refund-payment-${var.env}"
+  role             = aws_iam_role.lambda.arn
+  filename         = data.archive_file.refund_payment.output_path
+  source_code_hash = data.archive_file.refund_payment.output_base64sha256
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
+  timeout          = 30
+
+  environment {
+    variables = {
+      PAYMENT_SERVICE_URL = var.payment_service_url
+      INTERNAL_API_SECRET = var.internal_api_secret
+    }
+  }
+}
+
 # ── Step Functions state machine ──────────────────────────────────────────────
 
 resource "aws_sfn_state_machine" "payment" {
@@ -96,7 +119,10 @@ resource "aws_sfn_state_machine" "payment" {
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "ExpireHold"
+            # ResultPath keeps booking_id and show_id in the payload — without it
+            # the error object replaces the input and compensation has nothing to act on.
+            ResultPath = "$.error"
+            Next       = "RefundPayment"
           }
         ]
         Next = "SendEmail"
@@ -115,6 +141,30 @@ resource "aws_sfn_state_machine" "payment" {
       }
       BookingConfirmed = {
         Type = "Succeed"
+      }
+      # Money back before the seat goes back. A no-op when nothing was captured,
+      # which is the ordinary case when a hold simply times out.
+      RefundPayment = {
+        Type       = "Task"
+        Resource   = aws_lambda_function.refund_payment.arn
+        ResultPath = "$.refund"
+        Retry = [
+          {
+            ErrorEquals     = ["States.ALL"]
+            IntervalSeconds = 2
+            MaxAttempts     = 3
+            BackoffRate     = 2
+          }
+        ]
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            ResultPath  = "$.refundError"
+            # A failed refund must not strand the seat — release it and alarm on the log.
+            Next = "ExpireHold"
+          }
+        ]
+        Next = "ExpireHold"
       }
       ExpireHold = {
         Type     = "Task"

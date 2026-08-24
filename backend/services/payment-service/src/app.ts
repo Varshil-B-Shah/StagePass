@@ -1,6 +1,7 @@
 import express from 'express'
 import { ordersRouter } from './routes/orders'
 import { webhookRouter } from './routes/webhook'
+import { refundsRouter } from './routes/refunds'
 
 export function createApp() {
   const app = express()
@@ -14,8 +15,9 @@ export function createApp() {
     express.json()(req, res, next)
   })
 
-  // Lightweight auth check — real JWT validation is in Next.js middleware
-  const PUBLIC = ['/api/payments/webhook', '/health']
+  // Lightweight auth check — real JWT validation is in Next.js middleware.
+  // /internal/* is machine-to-machine and guards itself with x-internal-secret.
+  const PUBLIC = ['/api/payments/webhook', '/api/payments/internal', '/health']
   app.use((req, res, next) => {
     if (PUBLIC.some(p => req.path.startsWith(p))) return next()
     if (!req.headers['x-user-id']) return res.status(401).json({ error: 'Unauthorized' })
@@ -24,6 +26,7 @@ export function createApp() {
 
   app.use('/api/payments', ordersRouter)
   app.use('/api/payments', webhookRouter)
+  app.use('/api/payments', refundsRouter)
   app.get('/health', (_, res) => res.json({ ok: true }))
 
   return app

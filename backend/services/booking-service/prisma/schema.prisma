@@ -63,9 +63,15 @@ model Booking {
   event             Event     @relation(fields: [event_id], references: [id])
   show_id           String    // Added Phase 2 — DynamoDB show composite key
   seats             String[]
-  status            String    // "HOLD" | "RESERVED" | "CONFIRMED" | "FAILED" | "COMPLETED" | "CANCELLED"
+  status            String    // "HOLD" | "RESERVED" | "CONFIRMED" | "FAILED" | "COMPLETED" | "CANCELLED" | "REFUNDED"
   held_until        DateTime?
   payment_intent_id String?   // Stores razorpay_order_id in Phase 2
+
+  // Refunds are raised against the payment (pay_...), never the order (order_...),
+  // so the payment id is recorded as soon as capture is confirmed.
+  razorpay_payment_id String?
+  refund_id           String?  @unique // rfnd_... — presence of this is the idempotency guard
+  refund_status       String?  // "pending" | "processed" | "failed" — settles asynchronously
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
 }

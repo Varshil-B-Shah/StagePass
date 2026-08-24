@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { randomUUID } from 'crypto'
 
-type BookingStatus = 'HOLD' | 'RESERVED' | 'CONFIRMED' | 'FAILED' | 'COMPLETED' | 'CANCELLED'
+type BookingStatus = 'HOLD' | 'RESERVED' | 'CONFIRMED' | 'FAILED' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED'
 
 /** Mirrors the Booking model in prisma/schema.prisma.
  *  Once `prisma generate` has run this type will be available from @prisma/client directly.
@@ -15,6 +15,9 @@ export interface Booking {
   status: string
   held_until: Date | null
   payment_intent_id: string | null
+  razorpay_payment_id: string | null
+  refund_id: string | null
+  refund_status: string | null
   created_at: Date
   updated_at: Date
 }
@@ -101,6 +104,38 @@ export class BookingRepository {
       where: { id: booking_id },
       data: { status },
     }) as Promise<Booking>
+  }
+
+  /** Stores the captured payment id. Called before delivery is attempted, so a
+   *  failed confirmation still leaves the payment refundable. */
+  async recordPaymentId(booking_id: string, razorpay_payment_id: string): Promise<void> {
+    await this.db.booking.update({
+      where: { id: booking_id },
+      data: { razorpay_payment_id },
+    })
+  }
+
+  /** Marks a booking refunded and stores the Razorpay refund id.
+   *  The refund id is what makes a replayed compensation a no-op. */
+  async recordRefund(
+    booking_id: string,
+    refund_id: string,
+    refund_status: string
+  ): Promise<void> {
+    await this.db.booking.update({
+      where: { id: booking_id },
+      data: { status: 'REFUNDED', refund_id, refund_status },
+    })
+  }
+
+  /** Updates a refund's settlement state when the refund webhook arrives,
+   *  hours after the refund was raised. */
+  async recordRefundSettlement(refund_id: string, refund_status: string): Promise<boolean> {
+    const result = await this.db.booking.updateMany({
+      where: { refund_id },
+      data: { refund_status },
+    })
+    return result.count > 0
   }
 
   async getBookingsByUser(user_id: string): Promise<Booking[]> {

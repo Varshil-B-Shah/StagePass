@@ -73,6 +73,31 @@ export class BookingService {
     }
   }
 
+  /** Records the captured Razorpay payment id against the booking. */
+  async recordPayment(booking_id: string, razorpay_payment_id: string): Promise<void> {
+    const booking = await this.bookingRepo.getBookingById(booking_id)
+    if (!booking) throw Object.assign(new Error('Booking not found'), { status: 404 })
+    await this.bookingRepo.recordPaymentId(booking_id, razorpay_payment_id)
+  }
+
+  /** Marks a booking refunded. payment-service owns the decision to refund and the
+   *  call to Razorpay; booking-service only records the outcome. */
+  async recordRefund(
+    booking_id: string,
+    refund_id: string,
+    refund_status: string
+  ): Promise<void> {
+    const booking = await this.bookingRepo.getBookingById(booking_id)
+    if (!booking) throw Object.assign(new Error('Booking not found'), { status: 404 })
+    await this.bookingRepo.recordRefund(booking_id, refund_id, refund_status)
+  }
+
+  /** Applies the settlement status from the refund webhook. Unknown refund ids are
+   *  ignored rather than erroring — the webhook must not be retried forever. */
+  async recordRefundSettlement(refund_id: string, refund_status: string): Promise<boolean> {
+    return this.bookingRepo.recordRefundSettlement(refund_id, refund_status)
+  }
+
   async getMyBookings(user_id: string): Promise<import('../repositories/booking.repository').Booking[]> {
     return this.bookingRepo.getBookingsByUser(user_id)
   }

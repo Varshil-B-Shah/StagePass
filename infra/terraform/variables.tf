@@ -46,3 +46,8 @@ variable "internal_api_secret" {
   sensitive   = true
   default     = ""
 }
+
+variable "payment_service_url" {
+  description = "Base URL payment-service is reachable at from Lambda (refund compensation)"
+  type        = string
+}
