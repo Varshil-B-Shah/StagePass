@@ -1,0 +1,210 @@
+{
+  "metrics": {
+    "ws_connecting": {
+      "min": 3.1759,
+      "med": 19.55105,
+      "max": 32.8071,
+      "p(90)": 31.2434,
+      "p(95)": 31.803755000000002,
+      "avg": 18.833457999999997
+    },
+    "http_req_failed": {
+      "passes": 0,
+      "fails": 1003,
+      "value": 0
+    },
+    "data_sent": {
+      "count": 438492,
+      "rate": 29084.248709605843
+    },
+    "holds_ok": {
+      "count": 100,
+      "rate": 6.632788901418007,
+      "thresholds": {
+        "count==100": false
+      }
+    },
+    "ws_seat_updates": {
+      "count": 5000,
+      "rate": 331.6394450709003,
+      "thresholds": {
+        "count==5000": false
+      }
+    },
+    "http_req_connecting": {
+      "med": 0,
+      "max": 1.101,
+      "p(90)": 0.52732,
+      "p(95)": 0.54296,
+      "avg": 0.15020408773678978,
+      "min": 0
+    },
+    "http_req_sending": {
+      "avg": 0.012484745762711864,
+      "min": 0,
+      "med": 0,
+      "max": 0.74,
+      "p(90)": 0,
+      "p(95)": 0
+    },
+    "ws_sessions": {
+      "rate": 3.3163944507090033,
+      "count": 50
+    },
+    "data_received": {
+      "count": 626235,
+      "rate": 41536.84557679505
+    },
+    "iteration_duration": {
+      "avg": 724.20245623216,
+      "min": 5.7599,
+      "med": 9.0507,
+      "max": 15033.38,
+      "p(90)": 16.8205,
+      "p(95)": 25.899250000000002
+    },
+    "ws_msgs_sent": {
+      "count": 50,
+      "rate": 3.3163944507090033
+    },
+    "ws_session_duration": {
+      "med": 15020.04305,
+      "max": 15033.38,
+      "p(90)": 15031.38012,
+      "p(95)": 15032.159889999999,
+      "avg": 15019.280545999996,
+      "min": 15003.463
+    },
+    "holds_conflict": {
+      "count": 901,
+      "rate": 59.76142800177624,
+      "thresholds": {
+        "count==900": true
+      }
+    },
+    "http_req_duration": {
+      "med": 8.7789,
+      "max": 25.7596,
+      "p(90)": 15.09352,
+      "p(95)": 16.797619999999995,
+      "avg": 9.951349551345967,
+      "min": 5.7599
+    },
+    "http_req_tls_handshaking": {
+      "max": 0,
+      "p(90)": 0,
+      "p(95)": 0,
+      "avg": 0,
+      "min": 0,
+      "med": 0
+    },
+    "http_req_duration{expected_response:true}": {
+      "med": 8.7789,
+      "max": 25.7596,
+      "p(90)": 15.09352,
+      "p(95)": 16.797619999999995,
+      "avg": 9.951349551345967,
+      "min": 5.7599
+    },
+    "vus_max": {
+      "value": 350,
+      "min": 350,
+      "max": 350
+    },
+    "http_req_receiving": {
+      "p(90)": 0.85196,
+      "p(95)": 1.00186,
+      "avg": 0.29346759720837473,
+      "min": 0,
+      "med": 0,
+      "max": 1.7414
+    },
+    "checks": {
+      "passes": 1002,
+      "fails": 0,
+      "value": 1
+    },
+    "holds_unexpected": {
+      "rate": 0,
+      "count": 0,
+      "thresholds": {
+        "count==0": false
+      }
+    },
+    "http_req_duration{scenario:stampede}": {
+      "p(95)": 16.8205,
+      "avg": 9.952025874125878,
+      "min": 5.7599,
+      "med": 8.777,
+      "max": 25.7596,
+      "p(90)": 15.0948,
+      "thresholds": {
+        "p(95)<1000": false
+      }
+    },
+    "http_req_waiting": {
+      "max": 25.7596,
+      "p(90)": 15.020100000000001,
+      "p(95)": 16.40119,
+      "avg": 9.645397208374886,
+      "min": 5.3463,
+      "med": 8.5665
+    },
+    "iterations": {
+      "rate": 69.71061135390325,
+      "count": 1051
+    },
+    "ws_msgs_received": {
+      "count": 5050,
+      "rate": 334.95583952160933
+    },
+    "http_reqs": {
+      "count": 1003,
+      "rate": 66.5268726812226
+    },
+    "http_req_blocked": {
+      "p(95)": 0.54858,
+      "avg": 0.1761391824526421,
+      "min": 0,
+      "med": 0,
+      "max": 16.4307,
+      "p(90)": 0.5288
+    },
+    "vus": {
+      "min": 50,
+      "max": 52,
+      "value": 50
+    }
+  },
+  "root_group": {
+    "checks": {
+      "hold is 200 or 409": {
+        "fails": 0,
+        "name": "hold is 200 or 409",
+        "path": "::hold is 200 or 409",
+        "id": "e6f772f5c45ce38a88042992c6561a10",
+        "passes": 1001
+      }
+    },
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": {
+      "teardown": {
+        "groups": {},
+        "checks": {
+          "all 100 seats held exactly once": {
+            "passes": 1,
+            "fails": 0,
+            "name": "all 100 seats held exactly once",
+            "path": "::teardown::all 100 seats held exactly once",
+            "id": "998bf8ff505a1202af51903fd22590b2"
+          }
+        },
+        "name": "teardown",
+        "path": "::teardown",
+        "id": "a8a9942382e8ffe2e56ef29e664b8229"
+      }
+    }
+  }
+}

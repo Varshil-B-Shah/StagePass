@@ -93,8 +93,12 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
   const token = auth.slice(7)
 
-  // Always use Cognito JWKS — tokens are Cognito-issued in all environments
-  verifyProd(token)
+  // Cognito JWKS by default. AUTH_MODE=local accepts HS256 tokens signed with
+  // JWT_SECRET — local load testing only, never honoured in production.
+  const useLocal = process.env.AUTH_MODE === 'local' && config.node_env !== 'production'
+  const verify = useLocal ? async (t: string) => verifyLocal(t) : verifyProd
+
+  verify(token)
     .then((user) => {
       req.user = user
       next()
