@@ -76,7 +76,7 @@ resource "aws_iam_role_policy" "lambda_permissions" {
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
         ]
-        Resource = data.aws_dynamodb_table.seats.arn
+        Resource = aws_dynamodb_table.seats.arn
       },
       {
         Sid    = "DynamoPaymentTasks"
